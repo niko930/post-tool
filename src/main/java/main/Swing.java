@@ -4,33 +4,30 @@ import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONObject;
 import jxl.Sheet;
 import jxl.Workbook;
-import org.apache.http.HttpStatus;
-import org.apache.http.NameValuePair;
-import org.apache.http.client.entity.UrlEncodedFormEntity;
-import org.apache.http.client.methods.CloseableHttpResponse;
+import org.apache.http.HttpResponse;
+import org.apache.http.client.HttpClient;
 import org.apache.http.client.methods.HttpPost;
-import org.apache.http.impl.client.CloseableHttpClient;
-import org.apache.http.impl.client.HttpClients;
-import org.apache.http.message.BasicNameValuePair;
-import org.apache.http.util.EntityUtils;
+import org.apache.http.entity.StringEntity;
+import org.apache.http.impl.client.DefaultHttpClient;
+import org.apache.http.message.BasicHeader;
+import org.apache.http.protocol.HTTP;
 
 import java.awt.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.io.BufferedReader;
 import java.io.File;
-import java.io.IOException;
-import java.io.UnsupportedEncodingException;
-import java.util.ArrayList;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import javax.swing.*;
 import javax.swing.filechooser.FileNameExtensionFilter;
 
 public class Swing extends JFrame {    //继承JFrame顶层框架
-    private static final int WIDTH = 600;        //程序的宽
+    private static final int WIDTH = 900;        //程序的宽
     private static final int HEIGHT = 600;       //程序的高
-    private static final String URL = "http://localhost/***";     //请求路径
+    private static final String URL = "localhost:8080/xxxupdate";     //请求路径
     private static Integer count = 0;                   //总记录数
 
     //定义组件
@@ -45,6 +42,7 @@ public class Swing extends JFrame {    //继承JFrame顶层框架
     private JPanel jp2;
     private JButton jb1, jb2;       //定义按钮
     private JComboBox jcb1;         //定义下拉框
+    private JTextArea text;  //自定义输入框
 
     public Swing() {//构造函数
         //创建组件
@@ -55,17 +53,18 @@ public class Swing extends JFrame {    //继承JFrame顶层框架
         jta1.setEditable(false);            //不可编辑
         jspane1 = new JScrollPane(jta1);    //创建滚动窗格
         jta2 = new JTextArea();
+        text = new JTextArea("请输入Authorization", 1, 20);
         jta2.setEditable(false);
         jta2.setLineWrap(true);
         jspane2 = new JScrollPane(jta2);
         jsp = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, jspane1, jspane2); //创建拆分窗格
-        jsp.setDividerLocation(240);        //设置拆分窗格分频器初始位置
+        jsp.setDividerLocation(450);        //设置拆分窗格分频器初始位置
         jsp.setDividerSize(1);              //设置分频器大小
         //下部组件
         jp2 = new JPanel();
         jb1 = new JButton("上传");      //创建按钮
         jb2 = new JButton("开始");
-        String[] name = {"---请选择---", "参数一", "参数二", "参数三", "参数四"};
+        String[] name = {"需求打码倍数是否包含余额", "是", "否"};
         jcb1 = new JComboBox(name);         //创建下拉框
 
         jb1.addMouseListener(new MouseAdapter() {
@@ -85,6 +84,8 @@ public class Swing extends JFrame {    //继承JFrame顶层框架
 
         //添加组件
         jp1.add(jsp);
+
+        jp2.add(text);
         jp2.add(jcb1);
         jp2.add(jb1);
         jp2.add(jb1);
@@ -112,68 +113,88 @@ public class Swing extends JFrame {    //继承JFrame顶层框架
         System.out.println("size=" + s.length);
         int success = 0;
         int error = 0;
-        String str = (String)jcb1.getSelectedItem();
-        if(jcb1.getSelectedIndex() == 0){
+        String isCapitalString = (String) jcb1.getSelectedItem();
+        String isCapital;
+        if (isCapitalString.equals("是")) {
+            isCapital = "1";
+        } else {
+            isCapital = "0";
+        }
+        if (jcb1.getSelectedIndex() == 0) {
             jta2.append("参数无效，请选择参数！\n");
+            return;
+        }
+        if ("请输入Authorization".equals(text.getText()) || "".equals(text.getText())) {
+            jta2.append("请输入Authorization!!!\n");
             return;
         }
         for (int i = 1; i < s.length; i++) {
             String[] split = s[i].split("\t");
             String name = split[0];
             String money = split[1];
-            Map<String, String> params = new HashMap<String, String>();
-            params.put("acUsername", name);
-            params.put("acAppid", money);
-            params.put("参数", str);
-            System.out.println(params);
+            String damaMultiple = split[2];
+            String note = split[3];
+//            Map<String, String> params = new HashMap<String, String>();
+            JSONObject jsonObject = new JSONObject();
+            jsonObject.put("userId", name);                 //ID
+            jsonObject.put("balance", money);               //彩金
+            jsonObject.put("damaMultiple", damaMultiple);   //需求打码倍数
+            jsonObject.put("note", note);                   //备注
+            jsonObject.put("isCapital", isCapital);         //需求打码倍数是否包含余额
+
+//            params.put("userId", name);             //ID
+//            params.put("balance", money);           //彩金
+//            params.put("damaMultiple", damaMultiple);  //需求打码倍数
+//            params.put("note", note);               //备注
+//            params.put("isCapital", isCapital);     //需求打码倍数是否包含余额
+
+            System.out.println(jsonObject);
             //1.定义请求类型
+            HttpClient client = new DefaultHttpClient();
             HttpPost post = new HttpPost(URL);
+            post.setHeader("Content-Type", "application/json;charset=UTF-8");
+            post.setHeader("Authorization", text.getText());
+            post.setHeader("Host", "***");
             //2.字符集
             String charset = "UTF-8";
             //3.判断用户是否传递参数
-            if (params != null) {
-                //3.2准备List集合信息
-                List<NameValuePair> parameters = new ArrayList<NameValuePair>();
-                //3.3将数据封装到List集合中
-                for (Map.Entry<String, String> entry : params.entrySet()) {
-                    parameters.add(new BasicNameValuePair(entry.getKey(), entry.getValue()));
-                }
-                //3.1模拟表单提交
-                try {
-                    UrlEncodedFormEntity formEntity = new UrlEncodedFormEntity(parameters, charset); //采用u8编码
-                    //3.4将实体对象封装到请求对象中
-                    post.setEntity(formEntity);
-                } catch (UnsupportedEncodingException e) {
-                    e.printStackTrace();
-                }
+            if (jsonObject != null) {
+                StringEntity stringEntity = new StringEntity(jsonObject.toString(), "utf-8");
+                stringEntity.setContentEncoding(new BasicHeader(HTTP.CONTENT_TYPE, "application/json"));
+                post.setEntity(stringEntity);
             }
             String result = null;
-            //4.发送请求
             try {
-                CloseableHttpClient httpclient = HttpClients.createDefault();
-                CloseableHttpResponse response = httpclient.execute(post);
-                if (response.getStatusLine().getStatusCode() == HttpStatus.SC_OK) {
-                    result = EntityUtils.toString(response.getEntity());
-                } else {
-                    throw new RuntimeException();
-                }
-            } catch (IOException e) {
+                // 发送请求
+                HttpResponse httpResponse = client.execute(post);
+                // 获取响应输入流
+                InputStream inStream = httpResponse.getEntity().getContent();
+                BufferedReader reader = new BufferedReader(new InputStreamReader(inStream, "utf-8"));
+                StringBuilder strber = new StringBuilder();
+                String line = null;
+                while ((line = reader.readLine()) != null)
+                    strber.append(line + "\n");
+                inStream.close();
+                result = strber.toString();
+            } catch (Exception e) {
                 jta2.append("连接错误\n");
                 e.printStackTrace();
             }
 //            String str = httpClient.doPost(URL, params);
             JSONObject parse = (JSONObject) JSON.parse(result);
-            Integer code = (Integer) parse.get("code");
-            if (code == 0) {
+            Integer code = (Integer) parse.get("status");
+            String msg = (String) parse.get("msg");
+            if (code == 1 && "SUCCESS".equals(msg)) {
                 jta2.append(name + "\t" + money + "\t---成功\n");
                 success++;
             } else {
-                jta2.append(name + "\t" + money + "\t---失败\n");
+                jta2.append(code + "\t" + msg + "\t---失败\n");
                 error++;
             }
         }
-        jta2.append("共计:" + count + " ,成功:" + success + " ,失败:" + error +"\n");
+        jta2.append("共计:" + count + " ,成功:" + success + " ,失败:" + error + "\n");
     }
+
     /**
      * excel上传
      *
@@ -203,7 +224,7 @@ public class Swing extends JFrame {    //继承JFrame顶层框架
             //获取该工作表的行数，以供下面循环使用
             int rowSize = sheet.getRows();
             count = rowSize - 1;
-            jta1.append("姓名\t金额\n");
+            jta1.append("ID\t金额\t打码倍数\t备注\n");
             for (int i = 1; i < rowSize; i++) {
                 Map<String, String> map = new HashMap();
                 //获取姓名字段数据，第A列第i行，注意Excel中的行和列都是从0开始获取的，A列为0列
@@ -214,7 +235,11 @@ public class Swing extends JFrame {    //继承JFrame顶层框架
                 String money = sheet.getCell(1, i).getContents();
                 money = money.replaceAll(" ", "");
                 //添加显示到jta1中
-                jta1.append(name + "\t" + money + "\n");
+                String beishu = sheet.getCell(2, i).getContents();
+                beishu = beishu.replaceAll(" ", "");
+                String note = sheet.getCell(3, i).getContents();
+                note = note.replaceAll(" ", "");
+                jta1.append(name + "\t" + money + "\t" + beishu + "\t" + note + "\n");
                 map.put(name, money);
             }
         }
